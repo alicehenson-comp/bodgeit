@@ -1,0 +1,5 @@
+build/*
+fortify/*
+.sonatype
+
+!build/WEB-INF/classes/.gitkeep
