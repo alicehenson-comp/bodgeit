@@ -3,15 +3,15 @@ on:
   workflow_dispatch:
   push:
     # Master or main branch that you want to trigger this workflow for
-    branches: [main]
+    branches: [ main ]
   pull_request:
     # The branches below must be a subset of the branches above
-    branches: [main]
+    branches: [ main ]
 
-jobs:                                                  
+jobs:
   Fortify-SAST:
     # Use the appropriate runner for building your source code
-    runs-on: ubuntu-latest 
+    runs-on: ubuntu-latest
 
     steps:
       # Check out source code
@@ -22,7 +22,7 @@ jobs:
           fetch-depth: 2
       # If this run was triggered by a pull request event, then checkout the head of the pull request instead of the merge commit.
       - run: git checkout HEAD^2
-        if: ${{ github.event_name == 'pull_request' }} 
+        if: ${{ github.event_name == 'pull_request' }}
 
       # Java is required to run ScanCentral Client, and may be required for your build
       # Java version to use depends on the Java version required to run your build (if any),
@@ -37,7 +37,7 @@ jobs:
         uses: fortify/gha-setup-scancentral-client@v1.2.0
         with:
           version: 22.2.0                                      # On-prem customers should specify a client version that matches their ScanCentral environment
-                                                               # FoD customers usually should not specify a version but rather rely on the default version
+          # FoD customers usually should not specify a version but rather rely on the default version
           client-auth-token: ${{ secrets.CLIENT_AUTH_TOKEN }}  # Optional, but required if ScanCentral Controller requires client authentication
 
       ### Run Fortify ScanCentral Client ###
@@ -46,7 +46,7 @@ jobs:
       #   For other build tools, add your build commands to the workflow to download necessary dependencies and prepare according to Fortify SCA documentation.
       - name: Perform SAST Scan
         run: scancentral -url ${SC_CONTROLLER_URL} start $BUILD_OPTS -block -f $APPLICATION.fpr -upload -application $APPLICATION -version $VERSION -uptoken $SSC_UPLOAD_TOKEN
-        env:                                            
+        env:
           SC_CONTROLLER_URL: ${{ secrets.SC_CONTROLLER_URL }}
           SSC_UPLOAD_TOKEN: ${{ secrets.SSC_UPLOAD_TOKEN }}
           APPLICATION: "BodgeIt"
@@ -55,8 +55,24 @@ jobs:
 
       ### Archive ScanCentral Client logs on failure ###
       - name: Save ScanCentral Logs
-        uses: actions/upload-artifact@v2                
+        uses: actions/upload-artifact@v2
         if: failure()
         with:
-           name: scancentral-logs
-           path: ~/.fortify/scancentral/log
+          name: scancentral-logs
+          path: ~/.fortify/scancentral/log
+
+
+            # Pull SAST issues from Fortify on Demand and generate GitHub-optimized SARIF output
+      - name: Export Results
+        uses: fortify/gha-export-vulnerabilities@v1
+        with:
+          ssc_base_url: ${{ secrets.SSC_BASE_URL }}
+          ssc_auth_token: ${{ secrets.SSC_UPLOAD_TOKEN }}
+          ssc_version_name: "BodgeIt:1.0-gh-esast"
+
+      # Import Fortify SAST results to GitHub Security Code Scanning
+      - name: Import Results
+        uses: github/codeql-action/upload-sarif@v1
+        with:
+          sarif_file: ./gh-fortify-sast.sarif
+
